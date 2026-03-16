@@ -13,10 +13,10 @@ class HungryHelper extends PizzaShopHelper {
 
         if (workedPizza != null) {
             pickupCount++;
-            if (pickupCount % 3 == 0 && !workedPizza.ingredientsOnPizza.isEmpty()) {
-                workedPizza.ingredientsOnPizza.removeLast();
-                shop.pizzas.add(workedPizza);
-                workedPizza = null;
+            if (pickupCount % 3 == 0
+                    && !workedPizza.getIngredientsOnPizza().isEmpty()) {
+                workedPizza.removeLastIngredient();
+                putBack(workedPizza);
             }
         }
     }

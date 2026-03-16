@@ -1,11 +1,11 @@
 package org.example;
 
-class PizzaShopHelper implements PizzaShopWorker {
-    PizzaShop shop;
-    Pizza workedPizza = null;
+import java.util.Optional;
+
+class PizzaShopHelper extends BasePizzaWorker {
 
     public PizzaShopHelper(PizzaShop shop) {
-        this.shop = shop;
+        super(shop);
     }
 
     @Override
@@ -18,61 +18,43 @@ class PizzaShopHelper implements PizzaShopWorker {
     }
 
     private boolean checkOven() {
-        for (PizzaOven oven : shop.ovens) {
-            if (oven.contents != null && oven.contents.state == PizzaState.Baked) {
-                workedPizza = oven.contents;
-                oven.contents = null;
-                return true;
-            }
+        Optional<PizzaOven> ovenOpt = shop.findOvenWithBakedPizza();
+        if (ovenOpt.isPresent()) {
+            workedPizza = ovenOpt.get().ejectPizza();
+            return true;
         }
         return false;
     }
 
     protected void pickUpFilledPizza() {
-        for (Pizza pizza : shop.pizzas) {
-            if (pizza.state == PizzaState.Filled) {
-                // Check if pizza has correct number of ingredients
-                if (pizza.ingredientsOnPizza.size() < pizza.recipe.ingredients().size()) {
-                    // Incomplete pizza — discard and reorder
-                    pizza.ingredientsOnPizza.clear();
-                    pizza.state = PizzaState.Ordered;
-                    continue;
-                }
-                workedPizza = pizza;
-                break;
-            }
+        // Reset incomplete pizzas (e.g. nibbled by HungryHelper)
+        for (Pizza incomplete : shop.getIncompleteFilledPizzas()) {
+            incomplete.clearIngredients();
+            incomplete.setState(PizzaState.Ordered);
         }
-        if (workedPizza != null) {
-            shop.pizzas.remove(workedPizza);
-        }
+
+        shop.getNextFilledPizza().ifPresent(this::pickUp);
     }
 
     private void handlePizza() {
-        switch (workedPizza.state) {
+        switch (workedPizza.getState()) {
             case Filled -> {
-                for (PizzaOven oven : shop.ovens) {
-                    if (oven.contents == null) {
-                        oven.loadPizza(workedPizza);
-                        workedPizza = null;
-                        return;
-                    }
+                Optional<PizzaOven> freeOven = shop.findFreeOven();
+                if (freeOven.isPresent()) {
+                    freeOven.get().loadPizza(workedPizza);
+                    workedPizza = null;
+                } else {
+                    putBack(workedPizza);
                 }
-                // No free oven — put pizza back in queue
-                shop.pizzas.add(workedPizza);
-                workedPizza = null;
             }
             case Baking -> {
                 throw new RuntimeException("Hot pizza!");
             }
             case Baked -> {
-                workedPizza.state = PizzaState.Boxed;
-                shop.pizzas.add(workedPizza);
-                shop.pizzasPrepared++;
-                workedPizza = null;
+                complete(workedPizza);
             }
             default -> {
-                shop.pizzas.add(workedPizza);
-                workedPizza = null;
+                putBack(workedPizza);
             }
         }
     }

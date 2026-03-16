@@ -8,7 +8,8 @@ public class PizzaApp {
     public static void main(String[] args) {
         PizzaShop shop = new PizzaShop(List.of(
                 new PizzaRecipe("Margherita", List.of(Ingredient.Cheese)),
-                new PizzaRecipe("Peperoni", List.of(Ingredient.Cheese, Ingredient.Peperoni))),
+                new PizzaRecipe("Peperoni", List.of(Ingredient.Cheese, Ingredient.Peperoni)),
+                new PizzaRecipe("Hawaiian", List.of(Ingredient.Cheese, Ingredient.Ham, Ingredient.Pineapple))),
                 1, 1, 1);
 
         List<Pizza> orderedPizzas = new ArrayList<>();
@@ -18,11 +19,8 @@ public class PizzaApp {
 
         boolean success = shop.simulate(orderedPizzas, 100);
 
-        System.out.println("--- Simulation complete ---");
         System.out.println("Success: " + success);
-        System.out.println("Ticks: " + shop.getTicksPassed());
-        System.out.println("Pizzas prepared: " + shop.getPizzasPrepared());
-        System.out.println("Pizzas burned: " + shop.getPizzasBurned());
+        System.out.println(shop.getStatsSummary());
 
         for (Pizza pizza : orderedPizzas) {
             System.out.println(pizza);

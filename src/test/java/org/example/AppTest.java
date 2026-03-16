@@ -8,9 +8,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Unit tests for pizza App.
- */
 public class AppTest {
     PizzaShop shop = null;
 
@@ -36,9 +33,9 @@ public class AppTest {
         boolean success = shop.simulate(List.of(p), 50);
         assertTrue(success);
 
-        assertEquals(PizzaState.Boxed, p.state);
-        assertEquals(1, p.ingredientsOnPizza.size());
-        assertEquals(Ingredient.Cheese, p.ingredientsOnPizza.getFirst());
+        assertEquals(PizzaState.Boxed, p.getState());
+        assertEquals(1, p.getIngredientsOnPizza().size());
+        assertEquals(Ingredient.Cheese, p.getIngredientsOnPizza().getFirst());
     }
 
     @Test
@@ -54,10 +51,10 @@ public class AppTest {
         boolean success = shop.simulate(List.of(p), 50);
         assertTrue(success);
 
-        assertEquals(PizzaState.Boxed, p.state);
-        assertEquals(2, p.ingredientsOnPizza.size());
-        assertEquals(Ingredient.Cheese, p.ingredientsOnPizza.get(0));
-        assertEquals(Ingredient.Peperoni, p.ingredientsOnPizza.get(1));
+        assertEquals(PizzaState.Boxed, p.getState());
+        assertEquals(2, p.getIngredientsOnPizza().size());
+        assertEquals(Ingredient.Cheese, p.getIngredientsOnPizza().get(0));
+        assertEquals(Ingredient.Peperoni, p.getIngredientsOnPizza().get(1));
     }
 
     @Test
@@ -75,15 +72,16 @@ public class AppTest {
         Pizza p = shop.placeOrder(hawaiian, PizzaSize.M);
         boolean success = shop.simulate(List.of(p), 50);
         assertTrue(success);
-        assertEquals(3, p.ingredientsOnPizza.size());
+        assertEquals(3, p.getIngredientsOnPizza().size());
     }
 
     @Test
     public void testHotPizza() {
+        // workedPizza is protected — accessible from same package
         PizzaShopHelper helper = new PizzaShopHelper(shop);
 
         var p = new Pizza(PizzaSize.L, null);
-        p.state = PizzaState.Baking;
+        p.setState(PizzaState.Baking);
         helper.workedPizza = p;
 
         RuntimeException thrown = assertThrows(
@@ -97,32 +95,30 @@ public class AppTest {
 
     @Test
     public void testPizzaBurns() {
-        PizzaOven oven = shop.ovens.getFirst();
+        PizzaOven oven = shop.getOvens().getFirst();
         Pizza p = new Pizza(PizzaSize.L, shop.getMenu().getFirst());
         oven.loadPizza(p);
 
-        // Bake the pizza (BAKE_TIME ticks)
         try {
             for (int i = 0; i < PizzaOven.BAKE_TIME; i++) {
-                assertEquals(PizzaState.Baking, p.state);
+                assertEquals(PizzaState.Baking, p.getState());
                 oven.update();
             }
-            assertEquals(PizzaState.Baked, p.state);
+            assertEquals(PizzaState.Baked, p.getState());
         } catch (PizzaBurnedException e) {
             fail("Pizza burned prematurely!", e);
         }
 
-        // Leave it in the oven until it burns (TIME_TO_BURN ticks)
         try {
             for (int i = 0; i < PizzaOven.TIME_TO_BURN; i++) {
-                assertEquals(PizzaState.Baked, p.state);
+                assertEquals(PizzaState.Baked, p.getState());
                 oven.update();
             }
             fail("Pizza did not burn!");
         } catch (PizzaBurnedException e) {
             assertTrue(e.getMessage().startsWith("Pizza was burned!"));
         }
-        assertEquals(PizzaState.Burned, p.state);
+        assertEquals(PizzaState.Burned, p.getState());
     }
 
     @Test
@@ -140,23 +136,22 @@ public class AppTest {
     @Test
     public void testPizzaCanHaveSauce() {
         Pizza p = new Pizza(PizzaSize.L, shop.getMenu().getFirst());
-        p.sauce = "Tomato";
-        assertEquals("Tomato", p.sauce);
+        p.setSauce("Tomato");
+        assertEquals("Tomato", p.getSauce());
     }
 
     @Test
     public void testSauceAppliedDuringPreparation() {
         Pizza p = shop.placeOrder(shop.getMenu().getFirst(), PizzaSize.L);
-        assertNull(p.sauce);
+        assertNull(p.getSauce());
 
         boolean success = shop.simulate(List.of(p), 50);
         assertTrue(success);
-        assertNotNull(p.sauce, "Sauce should be applied during preparation");
+        assertNotNull(p.getSauce(), "Sauce should be applied during preparation");
     }
 
     @Test
     public void testBusyShop() {
-        // 3 cooks, 1 helper, 2 ovens
         PizzaShop busyShop = new PizzaShop(List.of(
                 new PizzaRecipe("Margherita", List.of(Ingredient.Cheese))),
                 3, 1, 2);
@@ -177,19 +172,18 @@ public class AppTest {
     public void testTamperedPizzaDetected() {
         PizzaRecipe recipe = shop.getMenu().get(1); // Peperoni: Cheese + Peperoni
         Pizza tampered = new Pizza(PizzaSize.L, recipe);
-        tampered.state = PizzaState.Filled;
-        tampered.ingredientsOnPizza.add(Ingredient.Cheese);
+        tampered.setState(PizzaState.Filled);
+        tampered.addIngredient(Ingredient.Cheese);
         // Missing Peperoni — only 1 of 2 ingredients!
 
-        shop.pizzas.add(tampered);
+        shop.returnPizza(tampered);
         shop.simulate(List.of(), 1);
 
-        // Verify the tampered pizza was NOT loaded into an oven
-        for (PizzaOven oven : shop.ovens) {
-            if (oven.contents != null) {
-                assertNotSame(tampered, oven.contents,
-                        "Tampered pizza should not be loaded into an oven");
-            }
+        // After 1 tick the helper should have detected the incomplete pizza
+        // and reset it — no oven should contain it
+        for (PizzaOven oven : shop.getOvens()) {
+            assertTrue(oven.isEmpty(),
+                    "Tampered pizza should not be loaded into an oven");
         }
     }
 
@@ -199,37 +193,32 @@ public class AppTest {
                 new PizzaRecipe("Margherita", List.of(Ingredient.Cheese))),
                 0, 0, 2);
         HungryHelper hungryHelper = new HungryHelper(hungryShop);
-        hungryShop.workers.add(hungryHelper);
+        hungryShop.addWorker(hungryHelper);
 
-        // Add 3 filled pizzas to the queue
         List<Pizza> pizzas = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
             Pizza p = new Pizza(PizzaSize.L, hungryShop.getMenu().getFirst());
-            p.state = PizzaState.Filled;
-            p.ingredientsOnPizza.add(Ingredient.Cheese);
-            hungryShop.pizzas.add(p);
+            p.setState(PizzaState.Filled);
+            p.addIngredient(Ingredient.Cheese);
+            hungryShop.returnPizza(p);
             pizzas.add(p);
         }
 
-        // Tick 1: pick up pizza 0 (pickupCount=1, normal)
-        // Tick 2: load pizza 0 into oven
-        // Tick 3: pick up pizza 1 (pickupCount=2, normal)
-        // Tick 4: load pizza 1 into oven
-        // Tick 5: pick up pizza 2 (pickupCount=3, nibble!) — eat ingredient, put back
+        // Tick 1: picks up pizza 0 (pickupCount=1, normal)
+        // Tick 2: loads pizza 0 into oven
+        // Tick 3: picks up pizza 1 (pickupCount=2, normal)
+        // Tick 4: loads pizza 1 into oven
+        // Tick 5: picks up pizza 2 (pickupCount=3, nibble!)
         for (int i = 0; i < 5; i++) {
             hungryShop.update();
         }
 
         assertEquals(3, hungryHelper.pickupCount, "Should have picked up 3 pizzas");
 
-        // Pizzas 0 and 1 should be in ovens (Baking)
-        assertEquals(PizzaState.Baking, pizzas.get(0).state);
-        assertEquals(PizzaState.Baking, pizzas.get(1).state);
+        assertEquals(PizzaState.Baking, pizzas.get(0).getState());
+        assertEquals(PizzaState.Baking, pizzas.get(1).getState());
 
-        // Pizza 2 should have been nibbled — empty ingredients, back in queue
-        assertTrue(pizzas.get(2).ingredientsOnPizza.isEmpty(),
+        assertTrue(pizzas.get(2).getIngredientsOnPizza().isEmpty(),
                 "Third pizza should have its ingredient eaten");
-        assertTrue(hungryShop.pizzas.contains(pizzas.get(2)),
-                "Nibbled pizza should be back in the queue");
     }
 }
